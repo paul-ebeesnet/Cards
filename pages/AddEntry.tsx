@@ -15,7 +15,7 @@ export const AddEntry: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Default to loading to prevent empty flash
   
   // Available cards for auto-complete
   const [availableCards, setAvailableCards] = useState<StoreCard[]>([]);
@@ -39,61 +39,71 @@ export const AddEntry: React.FC = () => {
 
   const [originalTxn, setOriginalTxn] = useState<Transaction | null>(null);
 
-  // Load Cards on Mount
+  // Unified Data Loading Logic
   useEffect(() => {
-    getCards().then(setAvailableCards);
-  }, []);
-
-  // Handle Card Prefill (When coming from Card Details page)
-  useEffect(() => {
-    if (prefillCardId && !isEditMode && availableCards.length > 0) {
-        const targetCard = availableCards.find(c => c.id === prefillCardId);
-        if (targetCard) {
-            setFormData(prev => ({
-                ...prev,
-                storeName: targetCard.storeName,
-                cardNumber: targetCard.cardNumber,
-                cardType: targetCard.cardType || 'prepaid',
-                // Optional: Prefill balance with current balance? 
-                // Usually user needs to enter NEW balance. But showing current in placeholder or similar might help.
-                // For now, let's just prefill identity info to avoid confusion.
-            }));
-            setActiveTab('manual');
-            setShowConfirmation(true); // Show the form immediately
-        }
-    }
-  }, [prefillCardId, isEditMode, availableCards]);
-
-  // Load data if in Edit Mode
-  useEffect(() => {
-    if (isEditMode && id) {
+    const init = async () => {
       setIsLoading(true);
-      const loadTxn = async () => {
-        const txn = await getTransactionById(id);
-        if (txn) {
-          setOriginalTxn(txn);
-          const card = await getCardById(txn.cardId);
-          setFormData({
-            storeName: card?.storeName || '',
-            cardNumber: card?.cardNumber || '',
-            date: txn.date,
-            amount: txn.amount.toString(),
-            // In edit mode, show the transaction's recorded balance, or the card's current if missing
-            balance: (txn.balanceAfter || card?.currentBalance || 0).toString(),
-            type: txn.type,
-            cardType: card?.cardType || 'prepaid',
-            notes: txn.notes || ''
-          });
-          setActiveTab('manual'); // Force manual tab
-        } else {
-          alert('Transaction not found');
-          navigate('/transactions');
+      try {
+        // 1. Fetch all cards first (needed for autocomplete & lookup)
+        const cards = await getCards();
+        setAvailableCards(cards);
+
+        // 2. Handle Edit Mode
+        if (isEditMode && id) {
+          const txn = await getTransactionById(id);
+          if (txn) {
+            setOriginalTxn(txn);
+            const card = await getCardById(txn.cardId);
+            setFormData({
+              storeName: card?.storeName || '',
+              cardNumber: card?.cardNumber || '',
+              date: txn.date,
+              amount: txn.amount.toString(),
+              balance: (txn.balanceAfter || card?.currentBalance || 0).toString(),
+              type: txn.type,
+              cardType: card?.cardType || 'prepaid',
+              notes: txn.notes || ''
+            });
+            setActiveTab('manual');
+            setShowConfirmation(true);
+          } else {
+            alert('Transaction not found');
+            navigate('/transactions');
+          }
+        } 
+        // 3. Handle Pre-fill Mode (Adding record to specific card)
+        else if (prefillCardId) {
+          // Try finding in the list first, fallback to individual fetch
+          let targetCard = cards.find(c => c.id === prefillCardId);
+          if (!targetCard) {
+             targetCard = await getCardById(prefillCardId);
+          }
+
+          if (targetCard) {
+             setFormData(prev => ({
+                ...prev,
+                storeName: targetCard!.storeName,
+                cardNumber: targetCard!.cardNumber,
+                cardType: targetCard!.cardType || 'prepaid',
+                // For new records, we don't prefill balance as it's usually changing
+                // But we could keep type as consumption by default
+             }));
+             setActiveTab('manual');
+             setShowConfirmation(true);
+          } else {
+             console.warn("Prefill card ID not found:", prefillCardId);
+          }
         }
+      } catch (err) {
+        console.error("Initialization Error:", err);
+      } finally {
         setIsLoading(false);
-      };
-      loadTxn();
-    }
-  }, [id, isEditMode, navigate]);
+      }
+    };
+
+    init();
+  }, [id, isEditMode, prefillCardId, navigate]);
+
 
   const handleAIParse = async () => {
     if (!inputText.trim()) return;
@@ -168,27 +178,24 @@ export const AddEntry: React.FC = () => {
         const latestItem = [...items].sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())[0];
 
         if (!targetCard) {
-          // CRITICAL FIX: Do not pass 'id' here. Let saveCard/Supabase generate the valid UUID.
           const newCardPayload: Partial<StoreCard> = {
             userId,
             storeName: firstItem.storeName,
             cardNumber: firstItem.cardNumber,
-            currentBalance: latestItem.balanceAfter, // For Credit Cards from statements, this might be 0 or current outstanding
+            currentBalance: latestItem.balanceAfter,
             cardType: firstItem.suggestedCardType || 'prepaid',
             lastUpdated: new Date().toISOString()
           };
-          // CAPTURE the return value which contains the real DB ID
           targetCard = await saveCard(newCardPayload);
         }
 
         for (const item of items) {
-          // CRITICAL FIX: Do not pass 'id' here either. Let DB generate UUID.
           const newTxn: Transaction = {
-            id: undefined as any, // ID generated by DB
-            cardId: targetCard.id, // Use valid UUID from DB
+            id: undefined as any,
+            cardId: targetCard.id,
             userId,
             amount: item.amount,
-            balanceAfter: item.balanceAfter, // Save snapshot
+            balanceAfter: item.balanceAfter,
             date: item.transactionDate,
             type: item.type,
             rawText: `Bulk Import: ${item.storeName}`,
@@ -203,7 +210,7 @@ export const AddEntry: React.FC = () => {
       console.error(error);
       const msg = error.message || 'Unknown error';
       if (msg.includes('Could not find the') && msg.includes('column')) {
-        alert("Database Schema Error: Your DB table is missing columns.\n\nPlease run this in Supabase SQL Editor:\n\nalter table transactions add column if not exists balance_after numeric;\nalter table transactions add column if not exists notes text;");
+        alert("Database Schema Error: Your DB table is missing columns.");
       } else {
         alert(`Failed to save bulk data: ${msg}`);
       }
@@ -221,10 +228,24 @@ export const AddEntry: React.FC = () => {
       if (!user) throw new Error("Please log in to add transactions");
       const userId = user.id;
 
+      // Ensure we have latest cards
       const allCards = await getCards();
-      let targetCard = allCards.find(
-        c => c.storeName === formData.storeName && c.cardNumber === formData.cardNumber
-      );
+      
+      let targetCard: StoreCard | undefined;
+
+      // 1. If we have a prefilled ID, try to find that specific card first
+      if (prefillCardId) {
+          targetCard = allCards.find(c => c.id === prefillCardId);
+          // If not in list for some reason, try fetching directly
+          if (!targetCard) targetCard = await getCardById(prefillCardId);
+      }
+
+      // 2. If no target yet (or not prefilled), match by name/number
+      if (!targetCard) {
+          targetCard = allCards.find(
+            c => c.storeName === formData.storeName && c.cardNumber === formData.cardNumber
+          );
+      }
 
       if (isEditMode && originalTxn) {
         // --- UPDATE EXISTING ---
@@ -241,26 +262,21 @@ export const AddEntry: React.FC = () => {
       } else {
         // --- CREATE NEW ---
         if (!targetCard) {
-          // CRITICAL FIX: Do not pass 'id'. Let saveCard generate the valid UUID.
+          // New Card Creation
           const newCardPayload: Partial<StoreCard> = {
             userId,
             storeName: formData.storeName,
             cardNumber: formData.cardNumber,
             currentBalance: parseFloat(formData.balance),
-            cardType: formData.cardType, // Save Type
+            cardType: formData.cardType, 
             lastUpdated: new Date().toISOString()
           };
-          // CAPTURE the result which contains the valid UUID
           targetCard = await saveCard(newCardPayload);
-        } else {
-            // Update Existing Card Type if not set? Maybe not implicitly.
-            // But we might want to ensure type matches for consistency?
-            // For now, let's just use the existing card.
         }
 
         const newTxn: Transaction = {
-          id: undefined as any, // Generated by DB
-          cardId: targetCard.id, // Use valid UUID
+          id: undefined as any, 
+          cardId: targetCard.id, // Ensure this ID is valid
           userId,
           amount: parseFloat(formData.amount),
           balanceAfter: parseFloat(formData.balance),
@@ -272,12 +288,12 @@ export const AddEntry: React.FC = () => {
         await addTransaction(newTxn);
       }
 
-      navigate(isEditMode ? '/transactions' : '/');
+      navigate(isEditMode ? '/transactions' : (prefillCardId ? `/cards/${prefillCardId}` : '/'));
     } catch (error: any) {
       console.error(error);
       const msg = error.message || 'Unknown error';
       if (msg.includes('Could not find the') && msg.includes('column')) {
-        alert("Database Schema Error: Your DB table is missing columns.\n\nPlease run this in Supabase SQL Editor:\n\nalter table transactions add column if not exists balance_after numeric;\nalter table transactions add column if not exists notes text;");
+        alert("Database Schema Error: Your DB table is missing columns.");
       } else {
         alert(`Failed to save data: ${msg}`);
       }
@@ -286,17 +302,18 @@ export const AddEntry: React.FC = () => {
     }
   };
 
-  // Check if current card is known
-  const isKnownCard = availableCards.some(c => c.storeName === formData.storeName && c.cardNumber === formData.cardNumber);
+  // Check if current card is known (used for hiding card type selector)
+  // If prefilled, we consider it known.
+  const isKnownCard = prefillCardId || availableCards.some(c => c.storeName === formData.storeName && c.cardNumber === formData.cardNumber);
 
-  if (isLoading) return <div className="p-10 text-center">Loading...</div>;
+  if (isLoading) return <div className="p-10 text-center animate-pulse text-gray-500">Loading form...</div>;
 
   return (
     <div className="pb-10">
       <h2 className="text-xl font-bold text-gray-800 mb-6">{isEditMode ? 'Edit Transaction' : 'Add Record'}</h2>
 
       {/* Tabs */}
-      {!isEditMode && !showBulkConfirmation && (
+      {!isEditMode && !showBulkConfirmation && !prefillCardId && (
         <div className="flex bg-gray-200 p-1 rounded-lg mb-6">
           <button
             onClick={() => { setActiveTab('ai'); setShowConfirmation(false); }}
@@ -314,7 +331,7 @@ export const AddEntry: React.FC = () => {
       )}
 
       {/* AI Input Area */}
-      {activeTab === 'ai' && !showConfirmation && !showBulkConfirmation && !isEditMode && (
+      {activeTab === 'ai' && !showConfirmation && !showBulkConfirmation && !isEditMode && !prefillCardId && (
         <div className="space-y-4">
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
             <strong>Supports Credit Card Statements!</strong>
@@ -395,12 +412,11 @@ export const AddEntry: React.FC = () => {
             <input
               type="text"
               required
-              disabled={isEditMode || !!prefillCardId} // Disable editing store name if prefilled from card page
+              disabled={isEditMode || !!prefillCardId} // Disable editing if prefilled
               className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode || !!prefillCardId ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
               value={formData.storeName}
               onChange={(e) => {
                   setFormData({ ...formData, storeName: e.target.value });
-                  // Auto-fill card number if known store (only if not pre-filled by ID)
                   if (!prefillCardId) {
                       const known = availableCards.find(c => c.storeName === e.target.value);
                       if (known) {
@@ -411,7 +427,6 @@ export const AddEntry: React.FC = () => {
               list="store-suggestions"
               placeholder="e.g. Starbucks or Chase Bank"
             />
-            {/* Auto-complete datalist */}
             <datalist id="store-suggestions">
                 {Array.from(new Set(availableCards.map(c => c.storeName))).map((name, i) => (
                     <option key={i} value={name} />
@@ -426,7 +441,7 @@ export const AddEntry: React.FC = () => {
                 type="text"
                 required
                 placeholder="8888"
-                disabled={isEditMode || !!prefillCardId} // Disable editing card number if prefilled
+                disabled={isEditMode || !!prefillCardId}
                 className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode || !!prefillCardId ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
                 value={formData.cardNumber}
                 onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
@@ -469,8 +484,8 @@ export const AddEntry: React.FC = () => {
             </div>
           </div>
 
-          {/* New Card Type Selector (Only if card is new or manual mode AND not prefilled) */}
-          {!isKnownCard && !isEditMode && !prefillCardId && (
+          {/* New Card Type Selector (Only if NOT known card) */}
+          {!isKnownCard && (
               <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Card Type</label>
                    <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
@@ -511,12 +526,11 @@ export const AddEntry: React.FC = () => {
              </p>
           </div>
 
-          {/* Notes Field */}
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notes</label>
             <textarea
               className="w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none bg-white text-gray-900 h-24 resize-none"
-              placeholder="Add optional notes (e.g. Lunch with team)"
+              placeholder="Add optional notes..."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             />
