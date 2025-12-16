@@ -26,7 +26,8 @@ export const AddEntry: React.FC = () => {
     amount: '',
     balance: '',
     type: 'consumption' as 'consumption' | 'recharge',
-    cardType: 'prepaid' as 'prepaid' | 'credit' // New Field
+    cardType: 'prepaid' as 'prepaid' | 'credit', // New Field
+    notes: '' // New Field
   });
 
   // Bulk Entry State
@@ -58,7 +59,8 @@ export const AddEntry: React.FC = () => {
             // In edit mode, show the transaction's recorded balance, or the card's current if missing
             balance: (txn.balanceAfter || card?.currentBalance || 0).toString(),
             type: txn.type,
-            cardType: card?.cardType || 'prepaid'
+            cardType: card?.cardType || 'prepaid',
+            notes: txn.notes || ''
           });
           setActiveTab('manual'); // Force manual tab
         } else {
@@ -92,7 +94,8 @@ export const AddEntry: React.FC = () => {
             amount: result.amount.toString(),
             balance: result.balanceAfter.toString(),
             type: result.type,
-            cardType: existingCard ? (existingCard.cardType || 'prepaid') : (result.suggestedCardType || 'prepaid')
+            cardType: existingCard ? (existingCard.cardType || 'prepaid') : (result.suggestedCardType || 'prepaid'),
+            notes: result.notes || ''
           });
           setShowConfirmation(true);
           setShowBulkConfirmation(false);
@@ -166,7 +169,8 @@ export const AddEntry: React.FC = () => {
             balanceAfter: item.balanceAfter, // Save snapshot
             date: item.transactionDate,
             type: item.type,
-            rawText: `Bulk Import: ${item.storeName}`
+            rawText: `Bulk Import: ${item.storeName}`,
+            notes: item.notes
           };
           await addTransaction(newTxn);
         }
@@ -203,6 +207,7 @@ export const AddEntry: React.FC = () => {
           balanceAfter: parseFloat(formData.balance),
           date: formData.date,
           type: formData.type,
+          notes: formData.notes
         };
         await updateTransaction(updatedTxn);
         
@@ -234,7 +239,8 @@ export const AddEntry: React.FC = () => {
           balanceAfter: parseFloat(formData.balance),
           date: formData.date,
           type: formData.type,
-          rawText: activeTab === 'ai' ? inputText : undefined
+          rawText: activeTab === 'ai' ? inputText : undefined,
+          notes: formData.notes
         };
         await addTransaction(newTxn);
       }
@@ -469,6 +475,17 @@ export const AddEntry: React.FC = () => {
              <p className="text-[10px] text-gray-400 mt-1">
                 This balance will be saved with the transaction record.
              </p>
+          </div>
+
+          {/* Notes Field */}
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notes</label>
+            <textarea
+              className="w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none bg-white text-gray-900 h-24 resize-none"
+              placeholder="Add optional notes (e.g. Lunch with team)"
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            />
           </div>
 
           <div className="flex gap-3 pt-4">

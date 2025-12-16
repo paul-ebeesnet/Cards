@@ -21,7 +21,8 @@ const mapTxnFromDB = (data: any): Transaction => ({
   balanceAfter: parseFloat(data.balance_after || 0), // Include balance_after
   date: data.date,
   type: data.type as 'consumption' | 'recharge',
-  rawText: data.raw_text
+  rawText: data.raw_text,
+  notes: data.notes
 });
 
 // --- Local Storage Cache Keys ---
@@ -326,7 +327,8 @@ export const addTransaction = async (txn: Transaction): Promise<void> => {
         balance_after: txn.balanceAfter || 0, // IMPORTANT: Save the balance snapshot
         date: txn.date,
         type: txn.type,
-        raw_text: txn.rawText
+        raw_text: txn.rawText,
+        notes: txn.notes
         });
 
     if (error) throw error;
@@ -348,6 +350,7 @@ export const updateTransaction = async (txn: Transaction): Promise<void> => {
         balance_after: txn.balanceAfter, // Update snapshot too
         date: txn.date,
         type: txn.type,
+        notes: txn.notes
         })
         .eq('id', txn.id);
 

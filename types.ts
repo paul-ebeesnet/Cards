@@ -23,6 +23,7 @@ export interface Transaction {
   date: string; // ISO String
   type: 'consumption' | 'recharge';
   rawText?: string;
+  notes?: string; // New field
 }
 
 // Helper type for the AI extraction result
@@ -34,4 +35,5 @@ export interface ParsedTransactionData {
   balanceAfter: number;
   type: 'consumption' | 'recharge';
   suggestedCardType?: 'prepaid' | 'credit';
+  notes?: string;
 }

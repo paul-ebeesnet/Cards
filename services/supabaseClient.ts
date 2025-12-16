@@ -71,10 +71,10 @@ export const resetSupabaseConfig = () => {
     card_number text,
     current_balance numeric default 0,
     last_updated timestamptz default now(),
-    card_type text default 'prepaid' -- NEW COLUMN
+    card_type text default 'prepaid'
   );
 
-  -- 3. Transactions Table
+  -- 3. Transactions Table (Updated with notes)
   create table if not exists transactions (
     id uuid default gen_random_uuid() primary key,
     card_id uuid references cards on delete cascade not null,
@@ -84,6 +84,7 @@ export const resetSupabaseConfig = () => {
     date date not null,
     type text check (type in ('consumption', 'recharge')),
     raw_text text,
+    notes text, -- NEW COLUMN
     created_at timestamptz default now()
   );
 

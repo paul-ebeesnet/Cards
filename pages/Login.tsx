@@ -271,8 +271,12 @@ export const Login: React.FC = () => {
         </div>
       </div>
       
-      <div className="mt-8 text-center text-white/50 text-xs">
+      <div className="mt-8 text-center text-white/50 text-xs space-y-2">
           <p>Secure Login via Supabase</p>
+          <div>
+            <p>Powered by Paul Chang @ <a href="https://www.ebeesnet.com" target="_blank" rel="noopener noreferrer" className="hover:text-white underline decoration-white/30 hover:decoration-white transition-all">eBees Network</a></p>
+            <p className="opacity-70 mt-1 font-mono text-[10px]">Version 1.1.0</p>
+          </div>
       </div>
     </div>
   );

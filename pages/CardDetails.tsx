@@ -190,9 +190,12 @@ export const CardDetails: React.FC = () => {
               const isRecharge = txn.type === 'recharge';
               return (
                 <div key={txn.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center transition-colors hover:bg-gray-50">
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0 pr-4">
                     <p className="font-medium text-gray-800">{isRecharge ? 'Recharge / Top-up' : 'Consumption'}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{txn.date}</p>
+                    {txn.notes && (
+                       <p className="text-xs text-gray-500 italic mt-1 truncate">{txn.notes}</p>
+                    )}
                   </div>
                   
                   <div className="flex flex-col items-end gap-2">

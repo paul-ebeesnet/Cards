@@ -75,6 +75,9 @@ const normalizeSingleTransaction = (rawData: any): ParsedTransactionData => {
       suggestedCardType = 'credit';
   }
 
+  // 8. Notes
+  const notes = normalizedData.notes || normalizedData.note || '';
+
   return {
     storeName: String(storeName).trim(),
     cardNumber: String(cardNumber).trim(), 
@@ -82,7 +85,8 @@ const normalizeSingleTransaction = (rawData: any): ParsedTransactionData => {
     amount,
     balanceAfter,
     type,
-    suggestedCardType
+    suggestedCardType,
+    notes
   };
 };
 
@@ -158,7 +162,8 @@ const parseWithLocalRegex = (text: string): ParsedTransactionData[] => {
             amount,
             balanceAfter: 0, // Statements often don't show running balance per line
             type,
-            suggestedCardType: globalType
+            suggestedCardType: globalType,
+            notes: ''
         });
     }
   });

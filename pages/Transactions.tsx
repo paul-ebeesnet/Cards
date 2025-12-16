@@ -57,9 +57,10 @@ export const Transactions: React.FC = () => {
       const query = searchQuery.toLowerCase();
       const storeName = (card?.storeName || '').toLowerCase();
       const rawText = (txn.rawText || '').toLowerCase();
+      const notes = (txn.notes || '').toLowerCase();
       
-      // Match against store name or raw parsed text
-      if (!storeName.includes(query) && !rawText.includes(query)) {
+      // Match against store name, raw parsed text, or notes
+      if (!storeName.includes(query) && !rawText.includes(query) && !notes.includes(query)) {
         return false;
       }
     }
@@ -108,7 +109,7 @@ export const Transactions: React.FC = () => {
           <input
             type="text"
             className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-primary sm:text-sm transition-colors"
-            placeholder="Search store or details..."
+            placeholder="Search store, notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -181,7 +182,10 @@ export const Transactions: React.FC = () => {
                 <div className="flex-1 min-w-0 pr-4">
                   <p className="font-medium text-gray-800 truncate">{card?.storeName || 'Unknown Store'}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{txn.date}</p>
-                  {txn.rawText && (
+                  {txn.notes && (
+                     <p className="text-xs text-gray-500 italic mt-1 truncate max-w-[200px]">{txn.notes}</p>
+                  )}
+                  {txn.rawText && !txn.notes && (
                     <p className="text-[10px] text-gray-300 truncate mt-1">AI Parsed</p>
                   )}
                 </div>

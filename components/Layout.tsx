@@ -78,6 +78,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto no-scrollbar pb-24 p-4">
         {children}
+
+        {/* App Footer */}
+        <div className="mt-8 mb-4 text-center">
+            <p className="text-[10px] text-gray-400 font-medium">
+              Powered by Paul Chang @ <a href="https://www.ebeesnet.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">eBees Network</a>
+            </p>
+            <p className="text-[9px] text-gray-300 font-mono mt-0.5">Version 1.1.0</p>
+        </div>
       </main>
 
       {/* Floating Action Button (FAB) for Add */}

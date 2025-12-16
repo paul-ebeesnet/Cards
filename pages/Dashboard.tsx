@@ -259,11 +259,14 @@ export const Dashboard: React.FC = () => {
               const card = cards.find(c => c.id === txn.cardId);
               return (
                 <div key={txn.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center">
-                  <div>
-                    <p className="font-medium text-gray-800">{card?.storeName || 'Unknown Store'}</p>
+                  <div className="min-w-0 pr-4">
+                    <p className="font-medium text-gray-800 truncate">{card?.storeName || 'Unknown Store'}</p>
                     <p className="text-xs text-gray-400">{txn.date}</p>
+                    {txn.notes && (
+                       <p className="text-[10px] text-gray-400 italic truncate mt-0.5">{txn.notes}</p>
+                    )}
                   </div>
-                  <div className={`text-right font-bold ${txn.type === 'recharge' ? 'text-primary' : 'text-gray-800'}`}>
+                  <div className={`text-right font-bold flex-shrink-0 ${txn.type === 'recharge' ? 'text-primary' : 'text-gray-800'}`}>
                     {txn.type === 'consumption' ? '-' : '+'}¥{txn.amount}
                   </div>
                 </div>
