@@ -16,7 +16,8 @@ export const CardDetails: React.FC = () => {
     storeName: '', 
     cardNumber: '', 
     balance: '',
-    cardType: 'prepaid' as 'prepaid' | 'credit'
+    cardType: 'prepaid' as 'prepaid' | 'credit',
+    expiryDate: ''
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -39,7 +40,8 @@ export const CardDetails: React.FC = () => {
             storeName: cardData.storeName,
             cardNumber: cardData.cardNumber,
             balance: cardData.currentBalance.toString(),
-            cardType: cardData.cardType || 'prepaid'
+            cardType: cardData.cardType || 'prepaid',
+            expiryDate: cardData.expiryDate || ''
         });
       } else {
         // Card not found or deleted
@@ -66,7 +68,8 @@ export const CardDetails: React.FC = () => {
               editForm.storeName, 
               editForm.cardNumber, 
               parseFloat(editForm.balance),
-              editForm.cardType
+              editForm.cardType,
+              editForm.expiryDate || undefined
           );
           setIsEditing(false);
           fetchData(); // Refresh UI
@@ -123,10 +126,42 @@ export const CardDetails: React.FC = () => {
     return gradients[name.length % gradients.length];
   };
 
+  const getDaysRemaining = (expiryDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    const diffTime = expiry.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   if (loading) return <div className="flex justify-center items-center h-full text-gray-500">Loading details...</div>;
   if (!card) return null;
 
   const isCredit = card.cardType === 'credit';
+  let expiryInfo = null;
+
+  if (!isCredit && card.expiryDate) {
+      const days = getDaysRemaining(card.expiryDate);
+      let colorClass = "bg-white/20";
+      let text = `${days} days left`;
+      
+      if (days < 0) {
+        text = "Expired";
+        colorClass = "bg-red-500 text-white shadow-lg";
+      } else if (days <= 30) {
+        colorClass = "bg-orange-500 text-white shadow-lg";
+      }
+      
+      expiryInfo = (
+        <div className="mt-3 flex items-center gap-2">
+            <span className={`text-xs px-2 py-1 rounded-lg font-bold backdrop-blur-md ${colorClass}`}>
+                {text}
+            </span>
+            <span className="text-xs opacity-80">Valid until: {card.expiryDate}</span>
+        </div>
+      );
+  }
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in relative">
@@ -161,6 +196,7 @@ export const CardDetails: React.FC = () => {
                 <p className="text-sm opacity-80 font-mono">**** {card.cardNumber}</p>
                 {isCredit && <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider">Credit</span>}
             </div>
+            {expiryInfo}
           </div>
           <div className="text-right">
             <p className="text-xs opacity-80 uppercase tracking-wide">{isCredit ? 'Outstanding' : 'Current Balance'}</p>
@@ -286,6 +322,18 @@ export const CardDetails: React.FC = () => {
                           />
                           <p className="text-[10px] text-gray-400 mt-1">Manual correction does not affect transaction history.</p>
                       </div>
+
+                      {editForm.cardType === 'prepaid' && (
+                        <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expiry Date</label>
+                           <input 
+                             type="date"
+                             className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50"
+                             value={editForm.expiryDate}
+                             onChange={e => setEditForm({...editForm, expiryDate: e.target.value})}
+                           />
+                        </div>
+                      )}
 
                       <div className="flex gap-3 mt-6">
                           <button 

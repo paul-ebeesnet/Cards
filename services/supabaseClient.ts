@@ -63,7 +63,7 @@ export const resetSupabaseConfig = () => {
     role text default 'user'
   );
 
-  -- 2. Cards Table (Updated with card_type)
+  -- 2. Cards Table (Updated with card_type and expiry_date)
   create table if not exists cards (
     id uuid default gen_random_uuid() primary key,
     user_id uuid references auth.users on delete cascade not null,
@@ -71,8 +71,12 @@ export const resetSupabaseConfig = () => {
     card_number text,
     current_balance numeric default 0,
     last_updated timestamptz default now(),
-    card_type text default 'prepaid'
+    card_type text default 'prepaid',
+    expiry_date date -- NEW COLUMN
   );
+  
+  -- If upgrading, run: 
+  -- alter table cards add column if not exists expiry_date date;
 
   -- 3. Transactions Table (Updated with notes)
   create table if not exists transactions (
@@ -84,13 +88,9 @@ export const resetSupabaseConfig = () => {
     date date not null,
     type text check (type in ('consumption', 'recharge')),
     raw_text text,
-    notes text, -- NEW COLUMN
+    notes text, 
     created_at timestamptz default now()
   );
-
-  -- IMPORTANT: If you are upgrading from an older version, run these commands to add missing columns:
-  -- alter table transactions add column if not exists balance_after numeric;
-  -- alter table transactions add column if not exists notes text;
 
   -- 4. Enable RLS and Policies (Standard Supabase setup)
   alter table profiles enable row level security;

@@ -1,3 +1,4 @@
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -12,6 +13,7 @@ export interface StoreCard {
   currentBalance: number; // For credit cards, this can represent Outstanding Balance or Available Limit based on user preference
   lastUpdated: string;
   cardType?: 'prepaid' | 'credit'; // New field
+  expiryDate?: string; // New field: ISO Date String (YYYY-MM-DD)
 }
 
 export interface Transaction {

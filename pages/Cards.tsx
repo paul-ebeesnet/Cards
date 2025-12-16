@@ -15,7 +15,8 @@ export const Cards: React.FC = () => {
     storeName: '',
     cardNumber: '',
     initialBalance: '',
-    cardType: 'prepaid' as 'prepaid' | 'credit'
+    cardType: 'prepaid' as 'prepaid' | 'credit',
+    expiryDate: ''
   });
 
   const loadCards = () => {
@@ -38,11 +39,12 @@ export const Cards: React.FC = () => {
             cardNumber: newCardForm.cardNumber,
             currentBalance: parseFloat(newCardForm.initialBalance) || 0,
             cardType: newCardForm.cardType,
+            expiryDate: newCardForm.expiryDate || undefined,
             userId: user.id
         });
 
         setIsAdding(false);
-        setNewCardForm({ storeName: '', cardNumber: '', initialBalance: '', cardType: 'prepaid' });
+        setNewCardForm({ storeName: '', cardNumber: '', initialBalance: '', cardType: 'prepaid', expiryDate: '' });
         loadCards(); // Refresh list
     } catch (err: any) {
         alert("Failed to add card: " + err.message);
@@ -77,10 +79,38 @@ export const Cards: React.FC = () => {
     return gradients[index];
   };
 
+  const getDaysRemaining = (expiryDate: string) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expiry = new Date(expiryDate);
+    expiry.setHours(0, 0, 0, 0);
+    const diffTime = expiry.getTime() - today.getTime();
+    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return days;
+  };
+
   const prepaidCards = cards.filter(c => c.cardType !== 'credit');
   const creditCards = cards.filter(c => c.cardType === 'credit');
 
-  const CardItem: React.FC<{ card: StoreCard; isCredit: boolean }> = ({ card, isCredit }) => (
+  const CardItem: React.FC<{ card: StoreCard; isCredit: boolean }> = ({ card, isCredit }) => {
+    let daysLeft = null;
+    let expiryStatusColor = 'bg-white/20';
+    let statusText = '';
+    
+    if (!isCredit && card.expiryDate) {
+        daysLeft = getDaysRemaining(card.expiryDate);
+        if (daysLeft < 0) {
+            statusText = 'Expired';
+            expiryStatusColor = 'bg-red-500 text-white';
+        } else if (daysLeft <= 30) {
+            statusText = `${daysLeft} days left`;
+            expiryStatusColor = 'bg-orange-500 text-white';
+        } else {
+            statusText = `${daysLeft} days left`;
+        }
+    }
+
+    return (
     <div 
         onClick={() => navigate(`/cards/${card.id}`)}
         className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-md bg-gradient-to-r ${isCredit ? getCreditGradient(card.storeName) : getPrepaidGradient(card.storeName)} cursor-pointer transform transition-all duration-200 hover:scale-[1.02] hover:shadow-xl`}
@@ -92,6 +122,15 @@ export const Cards: React.FC = () => {
                     <p className="text-xs opacity-80 font-mono">**** {card.cardNumber}</p>
                     {isCredit && <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider">Credit</span>}
                 </div>
+                
+                {!isCredit && card.expiryDate && (
+                    <div className="mt-3 flex items-center gap-2">
+                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold backdrop-blur-sm ${expiryStatusColor}`}>
+                             {statusText}
+                         </span>
+                         <span className="text-[10px] opacity-70">Exp: {card.expiryDate}</span>
+                    </div>
+                )}
             </div>
             <div className="text-right">
                 <p className="text-xs opacity-80">{isCredit ? 'Outstanding' : 'Balance'}</p>
@@ -104,7 +143,8 @@ export const Cards: React.FC = () => {
         <div className="absolute top-0 right-1/2 w-32 h-32 bg-white/5 rounded-full blur-xl"></div>
         {isCredit && <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>}
     </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in relative">
@@ -204,6 +244,18 @@ export const Cards: React.FC = () => {
                             onChange={e => setNewCardForm({...newCardForm, initialBalance: e.target.value})}
                           />
                       </div>
+
+                      {newCardForm.cardType === 'prepaid' && (
+                        <div>
+                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Expiry Date (Optional)</label>
+                           <input 
+                             type="date"
+                             className="w-full p-3 border border-gray-200 rounded-xl focus:border-primary outline-none"
+                             value={newCardForm.expiryDate}
+                             onChange={e => setNewCardForm({...newCardForm, expiryDate: e.target.value})}
+                           />
+                        </div>
+                      )}
 
                       <div className="flex gap-3 mt-6">
                           <button 
