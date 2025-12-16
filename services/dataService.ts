@@ -9,7 +9,8 @@ const mapCardFromDB = (data: any): StoreCard => ({
   storeName: data.store_name,
   cardNumber: data.card_number,
   currentBalance: parseFloat(data.current_balance),
-  lastUpdated: data.last_updated
+  lastUpdated: data.last_updated,
+  cardType: data.card_type || 'prepaid' // Default to prepaid
 });
 
 const mapTxnFromDB = (data: any): Transaction => ({
@@ -145,6 +146,7 @@ export const saveCard = async (card: Partial<StoreCard>): Promise<StoreCard> => 
     store_name: card.storeName,
     card_number: card.cardNumber,
     current_balance: card.currentBalance,
+    card_type: card.cardType || 'prepaid', // New Field
     last_updated: new Date().toISOString()
   };
 
@@ -175,13 +177,14 @@ export const saveCard = async (card: Partial<StoreCard>): Promise<StoreCard> => 
   }
 };
 
-export const updateCardDetails = async (id: string, storeName: string, cardNumber: string, currentBalance: number): Promise<void> => {
+export const updateCardDetails = async (id: string, storeName: string, cardNumber: string, currentBalance: number, cardType: 'prepaid' | 'credit'): Promise<void> => {
   const { error } = await supabase
     .from('cards')
     .update({ 
       store_name: storeName,
       card_number: cardNumber,
       current_balance: currentBalance,
+      card_type: cardType,
       last_updated: new Date().toISOString()
     })
     .eq('id', id);

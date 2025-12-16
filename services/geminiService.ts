@@ -28,8 +28,8 @@ const normalizeSingleTransaction = (rawData: any): ParsedTransactionData => {
     });
   }
 
-  // 1. Store Name
-  const storeName = normalizedData.storeName || normalizedData.store_name || normalizedData.store || 'Unknown Store';
+  // 1. Store Name (or Bank Name / Description)
+  const storeName = normalizedData.storeName || normalizedData.store_name || normalizedData.store || normalizedData.description || 'Unknown Store';
   
   // 2. Card Number
   const cardNumber = normalizedData.cardNumber || normalizedData.card_number || normalizedData.card_id || '0000';
@@ -45,7 +45,8 @@ const normalizeSingleTransaction = (rawData: any): ParsedTransactionData => {
     'recharge_amount', 
     'rechargeAmount',
     'money',
-    'cost'
+    'cost',
+    'txn_amount'
   ]);
 
   // 5. Balance
@@ -55,14 +56,23 @@ const normalizeSingleTransaction = (rawData: any): ParsedTransactionData => {
     'remainingBalance', 
     'balance', 
     'new_balance',
-    'current_balance'
+    'current_balance',
+    'outstanding',
+    'limit'
   ]);
 
   // 6. Type
   let type: 'consumption' | 'recharge' = 'consumption';
   const rawType = String(normalizedData.type || normalizedData.Type || '').toLowerCase().trim();
-  if (rawType.includes('recharge') || rawType.includes('充值') || rawType === 'income') {
+  if (rawType.includes('recharge') || rawType.includes('充值') || rawType === 'income' || rawType.includes('payment') || rawType.includes('repayment')) {
     type = 'recharge';
+  }
+
+  // 7. Suggest Card Type (Credit/Prepaid)
+  let suggestedCardType: 'prepaid' | 'credit' = 'prepaid';
+  const combinedText = (JSON.stringify(normalizedData) + storeName).toLowerCase();
+  if (combinedText.includes('bank') || combinedText.includes('credit') || combinedText.includes('visa') || combinedText.includes('master') || combinedText.includes('statement')) {
+      suggestedCardType = 'credit';
   }
 
   return {
@@ -71,7 +81,8 @@ const normalizeSingleTransaction = (rawData: any): ParsedTransactionData => {
     transactionDate,
     amount,
     balanceAfter,
-    type
+    type,
+    suggestedCardType
   };
 };
 
@@ -82,49 +93,72 @@ const parseWithLocalRegex = (text: string): ParsedTransactionData[] => {
   
   // Split by common delimiters if multiple messages are pasted. 
   // Relaxed length check to allow shorter messages.
-  const lines = text.split(/\n+/).filter(l => l.trim().length > 5);
+  const lines = text.split(/\n+/).filter(l => l.trim().length > 3);
+
+  // Global Context (e.g. if the user pasted a header like "Credit Card Statement 8888")
+  let globalCardNumber = "0000";
+  const headerCardMatch = text.match(/[\*]{3,}(\d{4})/);
+  if (headerCardMatch) globalCardNumber = headerCardMatch[1];
+  
+  let globalType: 'prepaid' | 'credit' = 'prepaid';
+  if (text.toLowerCase().includes('bank') || text.toLowerCase().includes('credit')) {
+      globalType = 'credit';
+  }
 
   lines.forEach(line => {
-    // Regex for Store Name: Matches 【StoreName】 or [StoreName]
-    const storeMatch = line.match(/[【\[](.*?)[】\]]/);
-    const storeName = storeMatch ? storeMatch[1] : "Parsed Store";
-
-    // Regex for Date: YYYY-MM-DD
-    const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
-    const transactionDate = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
-
-    // Regex for Card: ***1234
-    const cardMatch = line.match(/[\*]{3,}(\d{3,4})/);
-    const cardNumber = cardMatch ? cardMatch[1] : "0000";
-
-    // Regex for Type & Amount: "消费：316.0" or "充值：500"
-    // Matches "消费" or "recharge" followed by colon and digits
-    const amountMatch = line.match(/(消费|充值|consumption|recharge).*?[:：]\s*(\d+(\.\d+)?)/i);
-    
-    let type: 'consumption' | 'recharge' = 'consumption';
-    let amount = 0;
-
-    if (amountMatch) {
-        const typeStr = amountMatch[1];
-        if (typeStr.includes('充值') || typeStr.toLowerCase().includes('recharge')) {
-            type = 'recharge';
+    // 1. Try to find a Date (YYYY-MM-DD or MM/DD or DD/MM)
+    // Matches 2023-10-01, 10/01, 01/10
+    const dateMatch = line.match(/(\d{4}[-/]\d{2}[-/]\d{2})|(\d{1,2}[/-]\d{1,2})/);
+    let transactionDate = new Date().toISOString().split('T')[0];
+    if (dateMatch) {
+        if (dateMatch[1]) transactionDate = dateMatch[1];
+        else {
+            // Assume current year for short dates
+            const today = new Date();
+            transactionDate = `${today.getFullYear()}-${dateMatch[0].replace('/', '-')}`; 
         }
-        amount = parseFloat(amountMatch[2]);
     }
 
-    // Regex for Balance: "余额为：4443.0"
-    const balanceMatch = line.match(/(余额|balance).*?[:：]\s*(\d+(\.\d+)?)/i);
-    const balanceAfter = balanceMatch ? parseFloat(balanceMatch[2]) : 0;
+    // 2. Try to find an Amount
+    // Looks for numbers with decimals, optionally currency symbols, at end of line or after :
+    const amountMatch = line.match(/(?:HKD|USD|¥|\$)?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i);
+    // Find last number in the line often implies amount in statements
+    const amounts = line.match(/(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g);
+    
+    let amount = 0;
+    if (amounts && amounts.length > 0) {
+        // Usually the last number is the amount or balance.
+        // If there are 2 numbers, one might be balance.
+        const val = parseFloat(amounts[0].replace(/,/g, ''));
+        if (!isNaN(val)) amount = val;
+    }
 
-    // Only add if we found at least an amount
+    // 3. Try to find Store Name / Description
+    // Everything that isn't date or amount.
+    let cleanLine = line.replace(dateMatch?.[0] || '', '').replace(amountMatch?.[0] || '', '').trim();
+    // Remove common junk
+    cleanLine = cleanLine.replace(/Transaction|Payment|Date|Amount|Balance/gi, '').trim();
+    const storeName = cleanLine.length > 0 ? cleanLine.substring(0, 20) : "Parsed Transaction";
+
+    // 4. Determine Type
+    let type: 'consumption' | 'recharge' = 'consumption';
+    if (line.includes('+') || line.toLowerCase().includes('repayment') || line.toLowerCase().includes('cr')) {
+        type = 'recharge';
+    }
+
+    // 5. Card Number (Line specific override)
+    const cardMatch = line.match(/[\*]{3,}(\d{3,4})/);
+    const cardNumber = cardMatch ? cardMatch[1] : globalCardNumber;
+
     if (amount > 0) {
         results.push({
             storeName,
             cardNumber,
             transactionDate,
             amount,
-            balanceAfter,
-            type
+            balanceAfter: 0, // Statements often don't show running balance per line
+            type,
+            suggestedCardType: globalType
         });
     }
   });
@@ -164,8 +198,9 @@ export const parseTransactionText = async (text: string): Promise<ParsedTransact
         rawItems = data;
     } else if (typeof data === 'object') {
         // Handle n8n output structure if it returns { data: [...] } or { output: [...] }
-        // For now assume direct object or simple wrapper, defaulting to single item
-        rawItems = [data];
+        if (Array.isArray(data.data)) rawItems = data.data;
+        else if (Array.isArray(data.output)) rawItems = data.output;
+        else rawItems = [data];
     }
 
     const parsed = rawItems.map(normalizeSingleTransaction).filter(t => t.amount > 0);

@@ -7,10 +7,11 @@ export interface UserProfile {
 export interface StoreCard {
   id: string;
   userId: string;
-  storeName: string;
+  storeName: string; // For credit cards, this is the Bank Name
   cardNumber: string; // usually last 4 digits
-  currentBalance: number;
+  currentBalance: number; // For credit cards, this can represent Outstanding Balance or Available Limit based on user preference
   lastUpdated: string;
+  cardType?: 'prepaid' | 'credit'; // New field
 }
 
 export interface Transaction {
@@ -32,4 +33,5 @@ export interface ParsedTransactionData {
   amount: number;
   balanceAfter: number;
   type: 'consumption' | 'recharge';
+  suggestedCardType?: 'prepaid' | 'credit';
 }

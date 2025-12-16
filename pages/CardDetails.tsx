@@ -59,7 +59,8 @@ export const CardDetails: React.FC = () => {
               card.id, 
               editForm.storeName, 
               editForm.cardNumber, 
-              parseFloat(editForm.balance)
+              parseFloat(editForm.balance),
+              card.cardType || 'prepaid'
           );
           setIsEditing(false);
           fetchData(); // Refresh UI

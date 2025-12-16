@@ -5,8 +5,6 @@ import { saveCard, addTransaction, getCards, getTransactionById, getCardById, up
 import { supabase } from '../services/supabaseClient';
 import { StoreCard, Transaction, ParsedTransactionData } from '../types';
 
-const simpleId = () => Math.random().toString(36).substr(2, 9);
-
 export const AddEntry: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>(); // Check if we are in edit mode
@@ -27,7 +25,8 @@ export const AddEntry: React.FC = () => {
     date: new Date().toISOString().split('T')[0],
     amount: '',
     balance: '',
-    type: 'consumption' as 'consumption' | 'recharge'
+    type: 'consumption' as 'consumption' | 'recharge',
+    cardType: 'prepaid' as 'prepaid' | 'credit' // New Field
   });
 
   // Bulk Entry State
@@ -58,7 +57,8 @@ export const AddEntry: React.FC = () => {
             amount: txn.amount.toString(),
             // In edit mode, show the transaction's recorded balance, or the card's current if missing
             balance: (txn.balanceAfter || card?.currentBalance || 0).toString(),
-            type: txn.type
+            type: txn.type,
+            cardType: card?.cardType || 'prepaid'
           });
           setActiveTab('manual'); // Force manual tab
         } else {
@@ -81,13 +81,18 @@ export const AddEntry: React.FC = () => {
         if (results.length === 1) {
           // Single Result - Populate Form
           const result = results[0];
+          
+          // Auto-detect existing card type if possible
+          const existingCard = availableCards.find(c => c.storeName === result.storeName && c.cardNumber === result.cardNumber);
+          
           setFormData({
             storeName: result.storeName,
             cardNumber: result.cardNumber,
             date: result.transactionDate,
             amount: result.amount.toString(),
             balance: result.balanceAfter.toString(),
-            type: result.type
+            type: result.type,
+            cardType: existingCard ? (existingCard.cardType || 'prepaid') : (result.suggestedCardType || 'prepaid')
           });
           setShowConfirmation(true);
           setShowBulkConfirmation(false);
@@ -143,7 +148,8 @@ export const AddEntry: React.FC = () => {
             userId,
             storeName: firstItem.storeName,
             cardNumber: firstItem.cardNumber,
-            currentBalance: latestItem.balanceAfter, 
+            currentBalance: latestItem.balanceAfter, // For Credit Cards from statements, this might be 0 or current outstanding
+            cardType: firstItem.suggestedCardType || 'prepaid',
             lastUpdated: new Date().toISOString()
           };
           // CAPTURE the return value which contains the real DB ID
@@ -209,10 +215,15 @@ export const AddEntry: React.FC = () => {
             storeName: formData.storeName,
             cardNumber: formData.cardNumber,
             currentBalance: parseFloat(formData.balance),
+            cardType: formData.cardType, // Save Type
             lastUpdated: new Date().toISOString()
           };
           // CAPTURE the result which contains the valid UUID
           targetCard = await saveCard(newCardPayload);
+        } else {
+            // Update Existing Card Type if not set? Maybe not implicitly.
+            // But we might want to ensure type matches for consistency?
+            // For now, let's just use the existing card.
         }
 
         const newTxn: Transaction = {
@@ -236,6 +247,9 @@ export const AddEntry: React.FC = () => {
       setIsProcessing(false);
     }
   };
+
+  // Check if current card is known
+  const isKnownCard = availableCards.some(c => c.storeName === formData.storeName && c.cardNumber === formData.cardNumber);
 
   if (isLoading) return <div className="p-10 text-center">Loading...</div>;
 
@@ -265,11 +279,11 @@ export const AddEntry: React.FC = () => {
       {activeTab === 'ai' && !showConfirmation && !showBulkConfirmation && !isEditMode && (
         <div className="space-y-4">
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
-            Paste SMS text. AI will parse details.
+            Paste SMS text or <strong>Credit Card Statement</strong> (multiple lines). AI will parse details.
           </div>
           <textarea
-            className="w-full h-40 p-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-0 resize-none transition-colors"
-            placeholder="Paste text here..."
+            className="w-full h-40 p-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-0 resize-none transition-colors font-mono text-sm"
+            placeholder="Example: 2023-10-01 Starbucks 50.00"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
           ></textarea>
@@ -306,10 +320,11 @@ export const AddEntry: React.FC = () => {
                         </span>
                      </div>
                   </div>
-                  <div className="flex justify-between items-center text-xs">
-                     <span className="text-gray-400">Recorded Balance</span>
-                     <span className="font-mono bg-gray-100 px-2 py-1 rounded">¥{item.balanceAfter}</span>
-                  </div>
+                  {item.suggestedCardType === 'credit' && (
+                     <div className="flex justify-between items-center text-xs">
+                         <span className="bg-gray-800 text-white px-2 py-0.5 rounded">Credit Card</span>
+                     </div>
+                  )}
                </div>
              ))}
            </div>
@@ -337,16 +352,23 @@ export const AddEntry: React.FC = () => {
       {(showConfirmation || activeTab === 'manual') && !showBulkConfirmation && (
         <form onSubmit={handleSubmit} className="space-y-4 animate-fade-in">
           <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Store Name</label>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Store / Bank Name</label>
             <input
               type="text"
               required
               disabled={isEditMode}
               className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
               value={formData.storeName}
-              onChange={(e) => setFormData({ ...formData, storeName: e.target.value })}
+              onChange={(e) => {
+                  setFormData({ ...formData, storeName: e.target.value });
+                  // Auto-fill card number if known store
+                  const known = availableCards.find(c => c.storeName === e.target.value);
+                  if (known) {
+                      setFormData(prev => ({...prev, cardNumber: known.cardNumber, cardType: known.cardType || 'prepaid'}));
+                  }
+              }}
               list="store-suggestions"
-              placeholder="e.g. Starbucks"
+              placeholder="e.g. Starbucks or Chase Bank"
             />
             {/* Auto-complete datalist */}
             <datalist id="store-suggestions">
@@ -382,7 +404,7 @@ export const AddEntry: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
+             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">Type</label>
               <select
                 className="w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none bg-white text-gray-900"
@@ -390,7 +412,7 @@ export const AddEntry: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
               >
                 <option value="consumption">Consumption (-)</option>
-                <option value="recharge">Recharge (+)</option>
+                <option value="recharge">Recharge / Income (+)</option>
               </select>
             </div>
              <div>
@@ -406,9 +428,34 @@ export const AddEntry: React.FC = () => {
             </div>
           </div>
 
+          {/* New Card Type Selector (Only if card is new or manual mode) */}
+          {!isKnownCard && !isEditMode && (
+              <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Card Type</label>
+                   <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, cardType: 'prepaid'})}
+                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${formData.cardType === 'prepaid' ? 'bg-white shadow text-primary' : 'text-gray-400'}`}
+                      >
+                        Prepaid / Store Card
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, cardType: 'credit'})}
+                        className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${formData.cardType === 'credit' ? 'bg-gray-800 shadow text-white' : 'text-gray-400'}`}
+                      >
+                        Credit Card
+                      </button>
+                   </div>
+              </div>
+          )}
+
           <div>
              <div className="flex justify-between mb-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase">New Balance</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase">
+                    {formData.cardType === 'credit' ? 'Outstanding Balance (Total Due)' : 'New Balance'}
+                </label>
              </div>
              <input
                 type="number"
@@ -419,7 +466,7 @@ export const AddEntry: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
              />
              <p className="text-[10px] text-gray-400 mt-1">
-                This balance will be saved with the transaction record. The card's current balance will update to the latest transaction's record.
+                This balance will be saved with the transaction record.
              </p>
           </div>
 

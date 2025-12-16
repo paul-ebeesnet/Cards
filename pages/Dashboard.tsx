@@ -214,9 +214,19 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Total Asset Card */}
-      <div className="bg-gradient-to-br from-primary to-emerald-700 rounded-2xl p-6 text-white shadow-lg">
-        <p className="text-sm opacity-80 mb-1">Total Assets</p>
-        <h2 className="text-3xl font-bold">¥ {totalBalance.toLocaleString()}</h2>
+      <div 
+        onClick={() => navigate('/cards')}
+        className="bg-gradient-to-br from-primary to-emerald-700 rounded-2xl p-6 text-white shadow-lg cursor-pointer transform transition-transform active:scale-95 hover:shadow-xl"
+      >
+        <div className="flex justify-between items-start">
+            <div>
+                <p className="text-sm opacity-80 mb-1">Total Assets</p>
+                <h2 className="text-3xl font-bold">¥ {totalBalance.toLocaleString()}</h2>
+            </div>
+            <div className="bg-white/20 p-2 rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </div>
+        </div>
         <div className="mt-4 flex gap-2 text-xs opacity-90">
           <span className="bg-white/20 px-2 py-1 rounded-md">{cards.length} Cards</span>
           <span className="bg-white/20 px-2 py-1 rounded-md">Updated Today</span>
