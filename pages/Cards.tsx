@@ -1,15 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCards } from '../services/dataService';
+import { getCards, saveCard } from '../services/dataService';
 import { StoreCard } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 export const Cards: React.FC = () => {
   const navigate = useNavigate();
   const [cards, setCards] = useState<StoreCard[]>([]);
+  
+  // Add Card Modal State
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newCardForm, setNewCardForm] = useState({
+    storeName: '',
+    cardNumber: '',
+    initialBalance: '',
+    cardType: 'prepaid' as 'prepaid' | 'credit'
+  });
+
+  const loadCards = () => {
+    getCards().then(setCards);
+  };
 
   useEffect(() => {
-    getCards().then(setCards);
+    loadCards();
   }, []);
+
+  const handleAddCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Not logged in");
+
+        await saveCard({
+            storeName: newCardForm.storeName,
+            cardNumber: newCardForm.cardNumber,
+            currentBalance: parseFloat(newCardForm.initialBalance) || 0,
+            cardType: newCardForm.cardType,
+            userId: user.id
+        });
+
+        setIsAdding(false);
+        setNewCardForm({ storeName: '', cardNumber: '', initialBalance: '', cardType: 'prepaid' });
+        loadCards(); // Refresh list
+    } catch (err: any) {
+        alert("Failed to add card: " + err.message);
+    } finally {
+        setIsSaving(false);
+    }
+  };
 
   // Prepaid gradients
   const getPrepaidGradient = (name: string) => {
@@ -67,13 +107,22 @@ export const Cards: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6 pb-20">
-      <h2 className="text-xl font-bold text-gray-800">My Wallets</h2>
+    <div className="space-y-6 pb-20 animate-fade-in relative">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-800">My Wallets</h2>
+        <button 
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-1 bg-gray-900 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow hover:bg-black transition-colors"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+            Add Card
+        </button>
+      </div>
       
       {cards.length === 0 && (
         <div className="text-center mt-10 text-gray-500">
             <p>No cards added.</p>
-            <p className="text-sm">Use the (+) button to add your first consumption.</p>
+            <p className="text-sm">Use the (+) button to add your first consumption or card.</p>
         </div>
       )}
 
@@ -90,6 +139,90 @@ export const Cards: React.FC = () => {
           <div className="space-y-3">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Store / Prepaid Cards</h3>
               {prepaidCards.map(card => <CardItem key={card.id} card={card} isCredit={false} />)}
+          </div>
+      )}
+
+      {/* Add Card Modal */}
+      {isAdding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden p-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Card</h3>
+                  
+                  <form onSubmit={handleAddCard} className="space-y-4">
+                      {/* Card Type Selector */}
+                      <div className="flex bg-gray-100 p-1 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => setNewCardForm({...newCardForm, cardType: 'prepaid'})}
+                            className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${newCardForm.cardType === 'prepaid' ? 'bg-white shadow text-primary' : 'text-gray-500'}`}
+                          >
+                            Prepaid / Store
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setNewCardForm({...newCardForm, cardType: 'credit'})}
+                            className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${newCardForm.cardType === 'credit' ? 'bg-gray-800 shadow text-white' : 'text-gray-500'}`}
+                          >
+                            Credit Card
+                          </button>
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                              {newCardForm.cardType === 'credit' ? 'Bank Name' : 'Store Name'}
+                          </label>
+                          <input 
+                            type="text" 
+                            className="w-full p-3 border border-gray-200 rounded-xl focus:border-primary outline-none"
+                            placeholder={newCardForm.cardType === 'credit' ? "e.g. Chase Sapphire" : "e.g. Starbucks"}
+                            value={newCardForm.storeName}
+                            onChange={e => setNewCardForm({...newCardForm, storeName: e.target.value})}
+                            required
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Last 4 Digits</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-3 border border-gray-200 rounded-xl focus:border-primary outline-none"
+                            placeholder="8888"
+                            value={newCardForm.cardNumber}
+                            onChange={e => setNewCardForm({...newCardForm, cardNumber: e.target.value})}
+                            required
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                              {newCardForm.cardType === 'credit' ? 'Current Outstanding' : 'Current Balance'}
+                          </label>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            className="w-full p-3 border border-gray-200 rounded-xl focus:border-primary outline-none"
+                            placeholder="0.00"
+                            value={newCardForm.initialBalance}
+                            onChange={e => setNewCardForm({...newCardForm, initialBalance: e.target.value})}
+                          />
+                      </div>
+
+                      <div className="flex gap-3 mt-6">
+                          <button 
+                            type="button" 
+                            onClick={() => setIsAdding(false)}
+                            className="flex-1 py-3 text-gray-600 font-bold bg-gray-50 rounded-xl hover:bg-gray-100"
+                          >
+                              Cancel
+                          </button>
+                          <button 
+                            type="submit" 
+                            disabled={isSaving}
+                            className="flex-1 py-3 text-white font-bold bg-primary rounded-xl hover:bg-emerald-600 shadow-lg"
+                          >
+                              {isSaving ? 'Creating...' : 'Create Card'}
+                          </button>
+                      </div>
+                  </form>
+              </div>
           </div>
       )}
     </div>

@@ -12,7 +12,12 @@ export const CardDetails: React.FC = () => {
 
   // Edit Card State
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ storeName: '', cardNumber: '', balance: '' });
+  const [editForm, setEditForm] = useState({ 
+    storeName: '', 
+    cardNumber: '', 
+    balance: '',
+    cardType: 'prepaid' as 'prepaid' | 'credit'
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   // Transaction Delete State
@@ -33,7 +38,8 @@ export const CardDetails: React.FC = () => {
         setEditForm({
             storeName: cardData.storeName,
             cardNumber: cardData.cardNumber,
-            balance: cardData.currentBalance.toString()
+            balance: cardData.currentBalance.toString(),
+            cardType: cardData.cardType || 'prepaid'
         });
       } else {
         // Card not found or deleted
@@ -60,7 +66,7 @@ export const CardDetails: React.FC = () => {
               editForm.storeName, 
               editForm.cardNumber, 
               parseFloat(editForm.balance),
-              card.cardType || 'prepaid'
+              editForm.cardType
           );
           setIsEditing(false);
           fetchData(); // Refresh UI
@@ -96,7 +102,17 @@ export const CardDetails: React.FC = () => {
   };
 
   // Generate a random gradient based on store name
-  const getGradient = (name: string) => {
+  const getGradient = (name: string, isCredit: boolean = false) => {
+    if (isCredit) {
+        const gradients = [
+            'from-gray-800 to-gray-900', 
+            'from-slate-700 to-slate-900',
+            'from-neutral-700 to-neutral-800',
+            'from-emerald-900 to-gray-900',
+            'from-blue-900 to-gray-900'
+        ];
+        return gradients[name.length % gradients.length];
+    }
     const gradients = [
       'from-blue-500 to-blue-700',
       'from-purple-500 to-purple-700',
@@ -104,12 +120,13 @@ export const CardDetails: React.FC = () => {
       'from-orange-400 to-orange-600',
       'from-indigo-500 to-indigo-700'
     ];
-    const index = name.length % gradients.length;
-    return gradients[index];
+    return gradients[name.length % gradients.length];
   };
 
   if (loading) return <div className="flex justify-center items-center h-full text-gray-500">Loading details...</div>;
   if (!card) return null;
+
+  const isCredit = card.cardType === 'credit';
 
   return (
     <div className="space-y-6 pb-20 animate-fade-in relative">
@@ -136,14 +153,17 @@ export const CardDetails: React.FC = () => {
       </div>
 
       {/* Card Visual */}
-      <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-lg bg-gradient-to-r ${getGradient(card.storeName)}`}>
+      <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-lg bg-gradient-to-r ${getGradient(card.storeName, isCredit)}`}>
         <div className="relative z-10 flex justify-between items-start">
           <div>
             <h3 className="font-bold text-2xl">{card.storeName}</h3>
-            <p className="text-sm opacity-80 mt-1 font-mono">**** {card.cardNumber}</p>
+            <div className="flex items-center gap-2 mt-1">
+                <p className="text-sm opacity-80 font-mono">**** {card.cardNumber}</p>
+                {isCredit && <span className="bg-white/20 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider">Credit</span>}
+            </div>
           </div>
           <div className="text-right">
-            <p className="text-xs opacity-80 uppercase tracking-wide">Current Balance</p>
+            <p className="text-xs opacity-80 uppercase tracking-wide">{isCredit ? 'Outstanding' : 'Current Balance'}</p>
             <p className="text-3xl font-bold mt-1">¥ {card.currentBalance.toLocaleString()}</p>
           </div>
         </div>
@@ -211,6 +231,24 @@ export const CardDetails: React.FC = () => {
                   <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Card Details</h3>
                   
                   <form onSubmit={handleUpdateCard} className="space-y-4">
+                      {/* Card Type Switch */}
+                      <div className="flex bg-gray-100 p-1 rounded-lg mb-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditForm({...editForm, cardType: 'prepaid'})}
+                            className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${editForm.cardType === 'prepaid' ? 'bg-white shadow text-primary' : 'text-gray-500'}`}
+                          >
+                            Prepaid / Store
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditForm({...editForm, cardType: 'credit'})}
+                            className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${editForm.cardType === 'credit' ? 'bg-gray-800 shadow text-white' : 'text-gray-500'}`}
+                          >
+                            Credit Card
+                          </button>
+                      </div>
+
                       <div>
                           <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Store Name</label>
                           <input 
@@ -232,7 +270,9 @@ export const CardDetails: React.FC = () => {
                           />
                       </div>
                       <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Balance</label>
+                          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                              {editForm.cardType === 'credit' ? 'Current Outstanding' : 'Current Balance'}
+                          </label>
                           <input 
                             type="number" 
                             step="0.01"

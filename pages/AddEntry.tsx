@@ -279,11 +279,12 @@ export const AddEntry: React.FC = () => {
       {activeTab === 'ai' && !showConfirmation && !showBulkConfirmation && !isEditMode && (
         <div className="space-y-4">
           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm text-blue-800">
-            Paste SMS text or <strong>Credit Card Statement</strong> (multiple lines). AI will parse details.
+            <strong>Supports Credit Card Statements!</strong>
+            <p className="mt-1 opacity-80">Copy the text from your bank's SMS, Email, or App monthly statement. The AI Webhook will extract dates, amounts, and merchants automatically.</p>
           </div>
           <textarea
             className="w-full h-40 p-4 rounded-xl border-2 border-gray-200 focus:border-primary focus:ring-0 resize-none transition-colors font-mono text-sm"
-            placeholder="Example: 2023-10-01 Starbucks 50.00"
+            placeholder={`Paste here...\n\nExample:\n10/01 Starbucks $5.00\n10/02 Uber $15.50\nTotal Due: $20.50`}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
           ></textarea>
@@ -292,7 +293,7 @@ export const AddEntry: React.FC = () => {
             disabled={isProcessing || !inputText}
             className={`w-full py-4 rounded-xl font-bold text-white shadow-lg flex justify-center items-center ${isProcessing || !inputText ? 'bg-gray-400' : 'bg-primary hover:bg-emerald-600'}`}
           >
-            {isProcessing ? 'Analyzing...' : 'Analyze with AI'}
+            {isProcessing ? 'Analyzing with AI...' : 'Analyze Text'}
           </button>
         </div>
       )}
@@ -302,7 +303,7 @@ export const AddEntry: React.FC = () => {
         <div className="animate-fade-in space-y-4">
            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl text-sm text-emerald-800">
              <strong>Found {bulkData.length} transactions.</strong>
-             <p className="mt-1">Items are sorted by date. Balance will be updated to the latest value.</p>
+             <p className="mt-1">Items are sorted by date. Cards will be created or updated automatically.</p>
            </div>
            
            <div className="space-y-3">
@@ -322,7 +323,7 @@ export const AddEntry: React.FC = () => {
                   </div>
                   {item.suggestedCardType === 'credit' && (
                      <div className="flex justify-between items-center text-xs">
-                         <span className="bg-gray-800 text-white px-2 py-0.5 rounded">Credit Card</span>
+                         <span className="bg-gray-800 text-white px-2 py-0.5 rounded">Credit Card Detected</span>
                      </div>
                   )}
                </div>
