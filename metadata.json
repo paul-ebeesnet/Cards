@@ -1,0 +1,5 @@
+{
+  "name": "Copy of TopUp AI",
+  "description": "Smart stored-value card manager. Use AI to parse SMS consumption records and track balances across multiple stores.",
+  "requestFramePermissions": []
+}
