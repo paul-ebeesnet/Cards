@@ -47,12 +47,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
+  const handleAddClick = () => {
+    // Check if we are currently looking at a specific card details page
+    // Pattern: /cards/{uuid}
+    const match = location.pathname.match(/^\/cards\/([a-f0-9\-]+)$/i);
+    if (match) {
+        // Pass the cardId to the add page to pre-fill
+        navigate(`/add?cardId=${match[1]}`);
+    } else {
+        navigate('/add');
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100 max-w-md mx-auto shadow-2xl overflow-hidden relative">
       {/* Header */}
       <header className="bg-primary text-white p-4 pt-8 sticky top-0 z-10 shadow-md flex justify-between items-center">
         <h1 className="text-xl font-bold flex flex-col">
-          CardKeeper AI 
+          Nexus Cards 智匯卡
           {user && <span className="text-[10px] font-mono opacity-60 font-normal">role: {user.role}</span>}
         </h1>
         <div className="flex items-center gap-2">
@@ -75,12 +87,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto no-scrollbar pb-24 p-4">
-        {children}
+      {/* Main Content Area - Updated for Sticky Footer behavior */}
+      <main className="flex-1 overflow-y-auto no-scrollbar pb-24 p-4 flex flex-col">
+        <div className="flex-1">
+            {children}
+        </div>
 
         {/* App Footer */}
-        <div className="mt-8 mb-4 text-center">
+        <div className="mt-8 mb-4 text-center shrink-0">
             <p className="text-[10px] text-gray-400 font-medium">
               Powered by Paul Chang @ <a href="https://www.ebeesnet.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">eBees Network</a>
             </p>
@@ -91,7 +105,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Floating Action Button (FAB) for Add */}
       <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 z-20">
          <button 
-          onClick={() => navigate('/add')}
+          onClick={handleAddClick}
           className="bg-primary hover:bg-emerald-600 text-white p-4 rounded-full shadow-lg border-4 border-gray-100 transition-transform active:scale-95"
          >
            <PlusIcon />

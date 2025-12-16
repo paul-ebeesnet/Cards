@@ -88,6 +88,10 @@ export const resetSupabaseConfig = () => {
     created_at timestamptz default now()
   );
 
+  -- IMPORTANT: If you are upgrading from an older version, run these commands to add missing columns:
+  -- alter table transactions add column if not exists balance_after numeric;
+  -- alter table transactions add column if not exists notes text;
+
   -- 4. Enable RLS and Policies (Standard Supabase setup)
   alter table profiles enable row level security;
   alter table cards enable row level security;

@@ -27,7 +27,8 @@ export const Login: React.FC = () => {
     checkSession();
 
     const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.getModifierState('CapsLock')) {
+        // Safety check: ensure getModifierState exists before calling it
+        if (typeof e.getModifierState === 'function' && e.getModifierState('CapsLock')) {
             setCapsLockOn(true);
         } else {
             setCapsLockOn(false);
@@ -174,7 +175,7 @@ export const Login: React.FC = () => {
 
         <div className="p-8 pt-6">
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">CardKeeper AI</h2>
+            <h2 className="text-2xl font-bold text-gray-800">Nexus Cards 智匯卡</h2>
             <p className="text-gray-500 text-xs mt-1">
                 {activeTab === 'signin' ? 'Welcome back' : 'Create a new account'}
             </p>

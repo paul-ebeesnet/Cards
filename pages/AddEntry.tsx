@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { parseTransactionText } from '../services/geminiService';
 import { saveCard, addTransaction, getCards, getTransactionById, getCardById, updateTransaction } from '../services/dataService';
 import { supabase } from '../services/supabaseClient';
@@ -8,7 +8,9 @@ import { StoreCard, Transaction, ParsedTransactionData } from '../types';
 export const AddEntry: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>(); // Check if we are in edit mode
+  const [searchParams] = useSearchParams();   // Check for pre-filled card ID
   const isEditMode = !!id;
+  const prefillCardId = searchParams.get('cardId');
 
   const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
   const [inputText, setInputText] = useState('');
@@ -41,6 +43,26 @@ export const AddEntry: React.FC = () => {
   useEffect(() => {
     getCards().then(setAvailableCards);
   }, []);
+
+  // Handle Card Prefill (When coming from Card Details page)
+  useEffect(() => {
+    if (prefillCardId && !isEditMode && availableCards.length > 0) {
+        const targetCard = availableCards.find(c => c.id === prefillCardId);
+        if (targetCard) {
+            setFormData(prev => ({
+                ...prev,
+                storeName: targetCard.storeName,
+                cardNumber: targetCard.cardNumber,
+                cardType: targetCard.cardType || 'prepaid',
+                // Optional: Prefill balance with current balance? 
+                // Usually user needs to enter NEW balance. But showing current in placeholder or similar might help.
+                // For now, let's just prefill identity info to avoid confusion.
+            }));
+            setActiveTab('manual');
+            setShowConfirmation(true); // Show the form immediately
+        }
+    }
+  }, [prefillCardId, isEditMode, availableCards]);
 
   // Load data if in Edit Mode
   useEffect(() => {
@@ -179,7 +201,12 @@ export const AddEntry: React.FC = () => {
       navigate('/');
     } catch (error: any) {
       console.error(error);
-      alert(`Failed to save bulk data: ${error.message || 'Unknown error'}`);
+      const msg = error.message || 'Unknown error';
+      if (msg.includes('Could not find the') && msg.includes('column')) {
+        alert("Database Schema Error: Your DB table is missing columns.\n\nPlease run this in Supabase SQL Editor:\n\nalter table transactions add column if not exists balance_after numeric;\nalter table transactions add column if not exists notes text;");
+      } else {
+        alert(`Failed to save bulk data: ${msg}`);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -248,7 +275,12 @@ export const AddEntry: React.FC = () => {
       navigate(isEditMode ? '/transactions' : '/');
     } catch (error: any) {
       console.error(error);
-      alert(`Failed to save data: ${error.message || 'Unknown error'}`);
+      const msg = error.message || 'Unknown error';
+      if (msg.includes('Could not find the') && msg.includes('column')) {
+        alert("Database Schema Error: Your DB table is missing columns.\n\nPlease run this in Supabase SQL Editor:\n\nalter table transactions add column if not exists balance_after numeric;\nalter table transactions add column if not exists notes text;");
+      } else {
+        alert(`Failed to save data: ${msg}`);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -363,15 +395,17 @@ export const AddEntry: React.FC = () => {
             <input
               type="text"
               required
-              disabled={isEditMode}
-              className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
+              disabled={isEditMode || !!prefillCardId} // Disable editing store name if prefilled from card page
+              className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode || !!prefillCardId ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
               value={formData.storeName}
               onChange={(e) => {
                   setFormData({ ...formData, storeName: e.target.value });
-                  // Auto-fill card number if known store
-                  const known = availableCards.find(c => c.storeName === e.target.value);
-                  if (known) {
-                      setFormData(prev => ({...prev, cardNumber: known.cardNumber, cardType: known.cardType || 'prepaid'}));
+                  // Auto-fill card number if known store (only if not pre-filled by ID)
+                  if (!prefillCardId) {
+                      const known = availableCards.find(c => c.storeName === e.target.value);
+                      if (known) {
+                          setFormData(prev => ({...prev, cardNumber: known.cardNumber, cardType: known.cardType || 'prepaid'}));
+                      }
                   }
               }}
               list="store-suggestions"
@@ -392,8 +426,8 @@ export const AddEntry: React.FC = () => {
                 type="text"
                 required
                 placeholder="8888"
-                disabled={isEditMode}
-                className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
+                disabled={isEditMode || !!prefillCardId} // Disable editing card number if prefilled
+                className={`w-full p-3 rounded-lg border border-gray-200 focus:border-primary outline-none ${isEditMode || !!prefillCardId ? 'bg-gray-100 text-gray-500' : 'bg-white text-gray-900'}`}
                 value={formData.cardNumber}
                 onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })}
               />
@@ -435,8 +469,8 @@ export const AddEntry: React.FC = () => {
             </div>
           </div>
 
-          {/* New Card Type Selector (Only if card is new or manual mode) */}
-          {!isKnownCard && !isEditMode && (
+          {/* New Card Type Selector (Only if card is new or manual mode AND not prefilled) */}
+          {!isKnownCard && !isEditMode && !prefillCardId && (
               <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Card Type</label>
                    <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
@@ -491,7 +525,7 @@ export const AddEntry: React.FC = () => {
           <div className="flex gap-3 pt-4">
              <button
                type="button"
-               onClick={() => navigate(isEditMode ? '/transactions' : '/')}
+               onClick={() => navigate(isEditMode ? '/transactions' : (prefillCardId ? `/cards/${prefillCardId}` : '/'))}
                className="flex-1 py-3.5 rounded-xl border border-gray-300 text-gray-600 font-bold hover:bg-gray-50"
              >
                Back
