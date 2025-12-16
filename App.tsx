@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { AddEntry } from './pages/AddEntry';
@@ -9,6 +9,7 @@ import { Transactions } from './pages/Transactions';
 import { Login } from './pages/Login';
 import { Setup } from './pages/Setup';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { UpdatePassword } from './pages/UpdatePassword';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 
 const ProtectedRoute = ({ children, requireAdmin = false }: { children?: React.ReactNode, requireAdmin?: boolean }) => {
@@ -122,9 +123,31 @@ const ProtectedRoute = ({ children, requireAdmin = false }: { children?: React.R
   return <>{children}</>;
 };
 
+// --- COMPONENT TO HANDLE PASSWORD RECOVERY REDIRECTS ---
+const AuthRedirectHandler = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Supabase emits 'PASSWORD_RECOVERY' when the user clicks the recovery email link
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log("Password recovery event detected, redirecting...");
+        navigate('/update-password');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
+  return null;
+};
+
 const App: React.FC = () => {
   return (
     <HashRouter>
+      <AuthRedirectHandler />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/setup" element={<Setup />} />
@@ -140,6 +163,7 @@ const App: React.FC = () => {
                 <Route path="/cards" element={<Cards />} />
                 <Route path="/cards/:id" element={<CardDetails />} />
                 <Route path="/transactions" element={<Transactions />} />
+                <Route path="/update-password" element={<UpdatePassword />} />
                 <Route path="/admin" element={
                   <ProtectedRoute requireAdmin={true}>
                     <AdminDashboard />
